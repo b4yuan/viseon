@@ -1,16 +1,16 @@
 Description:
-    model_name: exp1_video_nov28
+    model_name: exp2_unconstrained_nov30
 
 general: 
     use_deterministic_algorithms: False
-    batch_size: 2
+    batch_size: 1
     device: 'cuda:0' 
     gpu : 0
-    save_path : ./Out/example_video_reconstruction
-    save_output: [phosphenes, stimulation, reconstruction]
+    save_path : ./Out/example_naturalistic_unconstrained
+    save_output: [phosphenes, stimulation, reconstruction, input]
     
 simulator:
-    base_config: /home/bryuan/main/sylvan/viseon/_config/exp1/simulator_config.yaml
+    base_config: /home/bryuan/main/sylvan/viseon/_config/exp2/simulator_config.yaml
     phosphene_map: /home/bryuan/main/sylvan/viseon/_config/phosphene_maps/DefaultCoordinateMap_1000_phosphenes.pickle
     
 e2e_models:
@@ -24,22 +24,22 @@ e2e_models:
     decoder_out_activation: sigmoid
 
 optimization:
-    learning_rate : 0.0001
-    epochs : 45
-    trainstats_per_epoch : 60
-    validations_per_epoch: 20
+    learning_rate : 0.0005
+    epochs : 16
+    trainstats_per_epoch : 24
+    validations_per_epoch: 8
     early_stop_criterium : 15
 
 training_pipeline:
-    pipeline: unconstrained-video-reconstruction
+    pipeline: unconstrained-image-autoencoder
     regularization_weight: 0.5  # relative weight for enforcing interpretable (supervised) phosphene encodings
     
 
 dataset:
-    dataset: BouncingMNIST
-    data_directory : /home/bryuan/main/_Datasets/BouncingMnist/
+    dataset: MNIST
+    data_directory : /home/bryuan/main/_Datasets/Mnist/
     load_preprocessed: True # for the ADE50k dataset:
-    sequence_length: 5 # for the BouncingMNIST dataset:
+    sequence_length: 1 # for the BouncingMNIST dataset:
     mode: recon # for the BouncingMNIST dataset:
     
     
@@ -47,4 +47,5 @@ dataset:
 
     
     
+
 

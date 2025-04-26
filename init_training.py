@@ -4,15 +4,15 @@ import numpy as np
 import pickle
 
 import dynaphos
-from dynaphos.cortex_models import get_visual_field_coordinates_probabilistically
+from dynaphos.cortex_models import get_visual_field_coordinates_probabilistically, get_visual_field_coordinates_from_cortex_full
 from dynaphos.simulator import GaussianSimulator as PhospheneSimulator
-from dynaphos.utils import get_data_kwargs
+from dynaphos.utils import get_data_kwargs, load_coordinates_from_yaml
 
 import model
 
 import local_datasets
 from torch.utils.data import DataLoader
-from utils import resize, normalize, undo_standardize, dilation3x3, CustomSummaryTracker
+from viseon.utils import resize, normalize, undo_standardize, dilation3x3, CustomSummaryTracker
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -96,6 +96,8 @@ def get_dataset(cfg):
         trainset, valset = local_datasets.get_bouncing_mnist_dataset(cfg)
     elif cfg['dataset'] == 'Characters':
         trainset, valset = local_datasets.get_character_dataset(cfg)
+    elif cfg['dataset'] == 'MNIST':
+        trainset, valset = local_datasets.get_mnist_dataset(cfg)
         
     trainloader = DataLoader(trainset, batch_size=cfg['batch_size'],shuffle=True, drop_last=True)
     valloader = DataLoader(valset,batch_size=cfg['batch_size'],shuffle=False, drop_last=True)
@@ -117,6 +119,9 @@ def get_models(cfg):
         optimizer = torch.optim.Adam([*encoder.parameters(), *decoder.parameters()], lr=cfg['learning_rate'])
     elif cfg['model_architecture'] == 'zhao-autoencoder':
         encoder, decoder = model.get_Zhao_autoencoder(cfg)
+        optimizer = torch.optim.Adam([*encoder.parameters(), *decoder.parameters()], lr=cfg['learning_rate'])
+    elif cfg['model_architecture'] == 'salinas-autoencoder':
+        encoder, decoder = model.get_salinas_autoencoder(cfg)
         optimizer = torch.optim.Adam([*encoder.parameters(), *decoder.parameters()], lr=cfg['learning_rate'])
     else:
         raise NotImplementedError
@@ -144,8 +149,21 @@ def get_simulator(cfg):
     params['thresholding'].update(cfg)
     device = get_data_kwargs(params)['device']
 
-    with open(cfg['phosphene_map'], 'rb') as handle:
-        coordinates_visual_field = pickle.load(handle, )
+    # with open(cfg['phosphene_map'], 'rb') as handle:
+    #     coordinates_visual_field = pickle.load(handle, )
+
+    # instead of loading in phosphene coordinates (above)
+    # generate them from cortex coordinates
+
+    coordinates_cortex = load_coordinates_from_yaml(
+        '/home/bryuan/main/sylvan/dynaphos/config/grid_coords_dipole_valid.yaml',
+        n_coordinates=1000, # TODO: un-hardcode
+        drift=params['run']['pos_drift']
+    )
+    coordinates_cortex = Map(*coordinates_cortex)
+    coordinates_visual_field = get_visual_field_coordinates_from_cortex_full(
+        params['cortex_model'], coordinates_cortex
+    )
     simulator = PhospheneSimulator(params, coordinates_visual_field)
     cfg['SPVsize'] = simulator.phosphene_maps.shape[-2:]
     return simulator
@@ -192,7 +210,8 @@ def get_pipeline_unconstrained_image_autoencoder(cfg):
         simulator = models['simulator']
 
         # Data manipulation
-        image, _ = batch
+        image = batch[0]
+        image.unsqueeze_(0)  # add channel dimension
         unstandardized_image = undo_standardize(image) # image values scaled back to range 0-1
 
         # Forward pass
@@ -202,11 +221,11 @@ def get_pipeline_unconstrained_image_autoencoder(cfg):
         reconstruction = decoder(phosphenes)
 
         # Output dictionary
-        out = {'input':  unstandardized_image * cfg['circular_mask'],
+        out = {'input':  (image * cfg['circular_mask']).to(torch.double),
                'stimulation': stimulation,
                'phosphenes': phosphenes,
                'reconstruction': reconstruction * cfg['circular_mask'],
-               'input_resized': resize(unstandardized_image * cfg['circular_mask'], cfg['SPVsize'])}
+               'input_resized': (resize(image * cfg['circular_mask'], cfg['SPVsize'])).to(torch.double),}
 
         if to_cpu:
             # Return a cpu-copy of the model output
@@ -348,9 +367,9 @@ def get_pipeline_unconstrained_video_reconstruction(cfg):
         out =  {'stimulation': stimulation_sequence,
                 'phosphenes': phosphenes,
                 'reconstruction': reconstruction * cfg['circular_mask'],
-                'input': frames * cfg['circular_mask'],
-                'input_resized': resize(frames * cfg['circular_mask'],
-                                         (cfg['sequence_length'],*cfg['SPVsize']),interpolation='trilinear'),}
+                'input': (frames * cfg['circular_mask']).to(torch.double),
+                'input_resized': (resize(frames * cfg['circular_mask'],
+                                         (cfg['sequence_length'],*cfg['SPVsize']),interpolation='trilinear')).to(torch.double),}
 
         if to_cpu:
             # Return a cpu-copy of the model output

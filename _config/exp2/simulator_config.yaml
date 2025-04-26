@@ -1,7 +1,7 @@
 # run settings
 run:
   resolution: [256,256] #[width,height] in pixels
-  view_angle: 16 #in degrees, horizontal view angle
+  view_angle: 20 #in degrees, horizontal view angle
   origin: [0, 0]
   fps: 35
   gpu: 0 #if using cuda, enter gpu nr here (e.g. 0)
@@ -11,6 +11,8 @@ run:
   use_gaussian_lut: False # Whether to approximate Gaussian activation with a
                           # look-up table.
   batch_size: 0  # Set to zero when simulator is not used for computational optimization
+  xy_std: 0
+  pos_drift: 0
 
 # display specs to accurately diplay sizes in dva
 display:
@@ -58,6 +60,9 @@ size:
   slope_size: 0.08 # slope of size saturation curve in mm/mu-A
   current_spread: 675.e-6 #A/mm2
   radius_to_sigma: 0.5 #circle to gaussian factor, sigma = r/2
+  Z1: 1 # impedence
+  Z_std: 0
+  Z2: 1
 
 # sigmoid on activation
 brightness_saturation:
@@ -70,7 +75,8 @@ thresholding:
   rheobase: 23.9e-6 # The minimal current (Ampere) for infinite stimulation duration. Is used as the constant leak current.
   activation_threshold: 9.141886000943878e-08 # Threshold of tissue activation for the perception of phosphenes
   activation_threshold_sd: 6.715877869833961e-08 # Standard deviation of the tissue activation threshold (for random initialization)
-
+  a_thr_scaling: 1
+  
 # Pulse width (pw), frequency (freq) default values, in case they aren't specified in the input
 default_stim:
   relative_stim_duration: 1 # range: [0-1]. stim_duration = rel_stim_dur * frame_duration

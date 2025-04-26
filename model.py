@@ -31,6 +31,17 @@ def get_Zhao_autoencoder(cfg):
 
     return encoder, decoder
 
+def get_salinas_autoencoder(cfg):
+    encoder = E2E_Encoder(in_channels=cfg['in_channels'],
+                          n_electrodes=cfg['n_electrodes'],
+                          out_scaling=cfg['output_scaling'],
+                          out_activation=cfg['encoder_out_activation']).to(cfg['device'])
+    
+    # encoder = ZhaoEncoder(in_channels=cfg['in_channels'], n_electrodes=cfg['n_electrodes']).to(cfg['device'])
+    decoder = SalinasDecoder()
+
+    return encoder, decoder
+
 def convlayer(n_input, n_output, k_size=3, stride=1, padding=1, resample_out=None):
     layer = [
         nn.Conv2d(n_input, n_output, kernel_size=k_size, stride=stride, padding=padding, bias=False),
@@ -260,6 +271,20 @@ class ZhaoDecoder(nn.Module):
     def forward(self, x):
         self.out = self.model(x)
         return self.out
+
+class SalinasDecoder(nn.Module):
+    def __init__(self):
+        super(SalinasDecoder, self).__init__()
+
+    def forward(self, x):
+        
+        # output = [F.interpolate(x[i], scale_factor=0.5, mode='bilinear', align_corners=False) for i in range(x.shape[0])]
+        # output = torch.stack(output, dim=0)
+
+        output = F.interpolate(x, scale_factor=0.5, mode='bilinear', align_corners=False)
+        
+        return output
+
     
     
 ### Exp 3 interaction models (Basic coactivation models)

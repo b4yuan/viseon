@@ -58,6 +58,18 @@ def get_character_dataset(cfg):
                              hor_flip=cfg['flip_horizontal'])
     return trainset, valset
 
+def get_mnist_dataset(cfg):
+    trainset = MNIST(directory=cfg['data_directory'],
+                     device=cfg['device'],
+                     mode=cfg['mode'],
+                     imsize=(128, 128))
+    valset = MNIST(directory=cfg['data_directory'],
+                   device=cfg['device'],
+                   mode=cfg['mode'],
+                   imsize=(128, 128),
+                   validation=True)
+    return trainset, valset
+
 
 def create_circular_mask(h, w, center=None, radius=None, circular_mask=True):
 
@@ -73,7 +85,76 @@ def create_circular_mask(h, w, center=None, radius=None, circular_mask=True):
     mask = dist_from_center <= radius
     return mask
 
+class MNIST(Dataset):
+    def __init__(self, directory='./datasets/Mnist',
+                 device=torch.device('cuda:0'),
+                 mode='recon',
+                 imsize=(128, 128),
+                 validation=False,
+                 circular_mask=True):
+        super().__init__()
 
+        VALIDATION_SPLIT = 0.1
+
+        self.device = device
+        self.mode = mode
+        self.imsize = imsize
+
+        self.transform = T.Compose([
+            T.Resize(imsize),
+            T.ToTensor()
+        ])
+
+        full_set = ds.MNIST(directory, train=True, transform=self.transform, download=True)
+        loader = DataLoader(full_set, batch_size=1, shuffle=False)
+
+        data_list = []
+        for img, _ in loader:
+            img = img.squeeze(0)  # Remove batch dimension (1, C, H, W) -> (C, H, W)
+            # Convert from float32 (0 to 1) back to uint8 (0 to 255)
+            # img = (img * 255).to(torch.uint8)  # Now img is of type uint8
+            data_list.append(img)  # Shape (C, H, W)
+
+        data = torch.stack(data_list)  # (N, C, H, W)
+
+        n_val = int(VALIDATION_SPLIT * data.shape[0])
+        if validation:
+            data = data[:n_val]
+        else:
+            data = data[n_val:]
+
+        # Reshape to (Batch, Frame, H, W) — MNIST has only one frame
+        # data = data.squeeze(1).unsqueeze(1) # .to(torch.double)  # (N, 1, H, W)
+        self.data = data 
+
+        if circular_mask:
+            self._mask = create_circular_mask(*imsize).view(1,*imsize)
+        else:
+            self._mask = None
+
+        print('MNIST dataset loaded.')
+        # print the shape of the dataset and the type
+
+        print(f'Dataset shape: {self.data.shape}')
+        print(f'Dataset type: {self.data.dtype}')
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, i):
+        if self.mode == 'recon':
+            frames = self.data[i]  # (1, H, W)
+            if self._mask is not None:
+                frames = frames * self._mask
+            return frames.detach().to(self.device)
+
+        elif self.mode == 'recon_pred':
+            input_frames = self.data[i, :, :, :]  # since only 1 frame
+            future_frames = self.data[i, :, :, :]  # no future frames in static MNIST
+            if self._mask is not None:
+                input_frames = input_frames * self._mask
+                future_frames = future_frames * self._mask
+            return input_frames.detach().to(self.device), future_frames.detach().to(self.device)
 
 class Bouncing_MNIST(Dataset):
 
@@ -119,6 +200,12 @@ class Bouncing_MNIST(Dataset):
             self._mask = create_circular_mask(*imsize).repeat(1,n_frames,1,1) #(Channel, Frame, Height, Width)
         else:
             self._mask = None
+
+        print('BouncingMNIST dataset loaded.')
+        # print the shape of the dataset and the type
+
+        print(f'Dataset shape: {self.data.shape}')
+        print(f'Dataset type: {self.data.dtype}')
 
     def __len__(self):
         return len(self.data)
